@@ -1,11 +1,6 @@
+public/
 .vscode
 node_modules/
 dist/
 tsconfig.tsbuildinfo
 .local-browsers/
-exports/
-public/*
-!public/.gitkeep
-*.pdf
-*.log
-.DS_Store
