@@ -671,6 +671,51 @@ test("reports content state changes for auto reload", async () => {
   }
 });
 
+test("exposes data hooks for in-place preview refresh", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mathlog-preview-hooks-"));
+  const contentDir = path.join(root, "public");
+  await fsp.mkdir(contentDir, { recursive: true });
+  await fsp.writeFile(path.join(contentDir, "hooks.md"), "# hooks\n\nbody\n", "utf8");
+
+  const server = await startPreviewServer(contentDir);
+  try {
+    const html = await fetch(server.url).then((res) => res.text());
+    assert.match(html, /<div data-article-nav-list>/);
+    assert.match(html, /<div data-preview-header>/);
+    assert.match(html, /<main class="markdown-body" data-preview-body>/);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("GET /api/preview returns freshly rendered fragments after a file edit", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mathlog-preview-api-"));
+  const contentDir = path.join(root, "public");
+  await fsp.mkdir(contentDir, { recursive: true });
+  const filePath = path.join(contentDir, "fragment.md");
+  await fsp.writeFile(filePath, "# fragment\n\nbefore\n", "utf8");
+
+  const server = await startPreviewServer(contentDir);
+  try {
+    const before = await fetch(
+      new URL("/api/preview?file=fragment.md", server.url),
+    ).then((res) => res.json());
+    assert.equal(before.selectedPath, "fragment.md");
+    assert.match(before.headerHtml, /<h1>fragment<\/h1>/);
+    assert.match(before.bodyHtml, /<p>before<\/p>/);
+    assert.match(before.navHtml, /article-nav__link--active/);
+
+    await fsp.writeFile(filePath, "# fragment\n\nafter\n", "utf8");
+    const after = await fetch(
+      new URL("/api/preview?file=fragment.md", server.url),
+    ).then((res) => res.json());
+    assert.match(after.bodyHtml, /<p>after<\/p>/);
+    assert.doesNotMatch(after.bodyHtml, /<html|<body/);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("renders real Mathlog sample articles without visible raw syntax", async (context) => {
   const contentDir = path.resolve("src/sample_data");
   try {

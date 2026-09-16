@@ -24,7 +24,7 @@ import {
   MATHJAX_DIST_DIR,
 } from "./paths.js";
 import { bindServeShortcuts } from "./shortcuts.js";
-import { createHtmlDocument } from "./html-document.js";
+import { createHtmlDocument, renderArticleNav, renderPreviewHeader } from "./html-document.js";
 
 const require = createRequire(import.meta.url);
 const MarkdownIt = require("markdown-it");
@@ -1325,17 +1325,24 @@ async function loadHighlightCss() {
   return highlightCssPromise;
 }
 
-async function renderHtml(contentRoot, selectedPath) {
+// 記事一覧・選択中の記事・本文HTMLをまとめて解決する。
+// ページ全体のHTML生成(renderHtml)と、差分更新用のAPI(/api/preview)の両方から共有される。
+async function resolveArticleView(contentRoot, selectedPath) {
   const articles = await listMarkdownFiles(contentRoot);
-  const macroLibrary = await readMacroLibrary(contentRoot);
   const selectedArticle =
     articles.find((article) => article.relativePath === selectedPath) || articles[0] || null;
   const article = selectedArticle
     ? await readArticleFile(selectedArticle.filePath)
     : { markdown: "# 記事がありません\n\n「新規記事作成」から Markdown ファイルを作成できます。", meta: {} };
   const currentDir = selectedArticle ? path.posix.dirname(selectedArticle.relativePath) : "";
-  const [body, highlightCss] = await Promise.all([
-    renderMarkdown(article.markdown, { currentDir: currentDir === "." ? "" : currentDir }),
+  const body = await renderMarkdown(article.markdown, { currentDir: currentDir === "." ? "" : currentDir });
+  return { articles, selectedArticle, body };
+}
+
+async function renderHtml(contentRoot, selectedPath) {
+  const [{ articles, selectedArticle, body }, macroLibrary, highlightCss] = await Promise.all([
+    resolveArticleView(contentRoot, selectedPath),
+    readMacroLibrary(contentRoot),
     loadHighlightCss(),
   ]);
   return await createHtmlDocument({
@@ -1535,6 +1542,23 @@ async function createServer({ contentRoot, host = DEFAULT_HOST, port = DEFAULT_P
         const saved = await writeMacroLibrary(contentRoot, library);
         res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(saved));
+        return;
+      }
+
+      if (pathname === "/api/preview" && req.method === "GET") {
+        const selectedPathParam = requestUrl.searchParams.get("file") || "";
+        const { articles, selectedArticle, body } = await resolveArticleView(contentRoot, selectedPathParam);
+        const payload = {
+          selectedPath: selectedArticle?.relativePath || "",
+          navHtml: renderArticleNav(articles, selectedArticle?.relativePath || ""),
+          headerHtml: renderPreviewHeader(selectedArticle),
+          bodyHtml: body,
+        };
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(JSON.stringify(payload));
         return;
       }
 

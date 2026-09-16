@@ -173,7 +173,44 @@ function attachMacroManager() {
   renderMacroManager();
 }
 
+// ファイル変更を検知したときのページ更新方法。
+// 記事プレビュー画面では本文・見出し・記事一覧だけを差分更新してスクロール位置を保ち、
+// それ以外の画面(マクロ管理画面など)では従来通り全体を再読み込みする。
+class PreviewRefresher {
+  constructor() {
+    this.navList = document.querySelector("[data-article-nav-list]");
+    this.header = document.querySelector("[data-preview-header]");
+    this.body = document.querySelector("[data-preview-body]");
+  }
+
+  get canRefreshInPlace() {
+    return Boolean(this.navList && this.header && this.body);
+  }
+
+  async refresh() {
+    if (!this.canRefreshInPlace) {
+      window.location.reload();
+      return;
+    }
+    try {
+      const file = new URLSearchParams(window.location.search).get("file") || "";
+      const payload = await requestJson("/api/preview?file=" + encodeURIComponent(file));
+      this.navList.innerHTML = payload.navHtml;
+      this.header.innerHTML = payload.headerHtml;
+      this.body.innerHTML = payload.bodyHtml;
+      attachCodeActions();
+      if (window.MathJax?.typesetPromise) {
+        await window.MathJax.typesetPromise([this.body]);
+      }
+    } catch {
+      // 差分更新に失敗した場合は従来通りの全体再読み込みにフォールバックする。
+      window.location.reload();
+    }
+  }
+}
+
 function attachAutoReload() {
+  const refresher = new PreviewRefresher();
   let currentVersion = "";
   const check = async () => {
     try {
@@ -184,7 +221,10 @@ function attachAutoReload() {
         currentVersion = state.version || "";
         return;
       }
-      if (state.version && state.version !== currentVersion) window.location.reload();
+      if (state.version && state.version !== currentVersion) {
+        currentVersion = state.version;
+        await refresher.refresh();
+      }
     } catch {
       // Keep preview usable even while files are being edited.
     }

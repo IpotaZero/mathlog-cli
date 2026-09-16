@@ -163,11 +163,11 @@ function renderPageBody({
           <strong>Articles</strong>
           <small>${escapeHtml(path.relative(DOCS_ROOT, contentRoot) || ".")}</small>
         </div>
-        ${renderArticleNav(articles, selectedPath)}
+        <div data-article-nav-list>${renderArticleNav(articles, selectedPath)}</div>
       </aside>
       <div class="preview-pane">
-        ${renderPreviewHeader(articles.find((article) => article.relativePath === selectedPath) || null)}
-        <main class="markdown-body">
+        <div data-preview-header>${renderPreviewHeader(articles.find((article) => article.relativePath === selectedPath) || null)}</div>
+        <main class="markdown-body" data-preview-body>
 ${body}
         </main>
       </div>
