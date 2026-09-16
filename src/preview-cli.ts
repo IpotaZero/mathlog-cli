@@ -1082,6 +1082,10 @@ function createMarkdownIt() {
     html: true,
     linkify: true,
     typographer: false,
+    // Mathlog本家は改行文字1つで見た目上の改行(<br>)になる。
+    // markdown-itはデフォルトでは空行を挟まないと改行されないため、
+    // breaks: true でMathlog本家の挙動に合わせる。
+    breaks: true,
   });
 
   md.use(multimdTable, {

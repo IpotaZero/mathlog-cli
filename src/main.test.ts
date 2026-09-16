@@ -542,6 +542,26 @@ test("renders non-Mathlog diagram fences as code blocks", async () => {
   }
 });
 
+test("renders a single newline within a paragraph as a line break", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mathlog-linebreak-"));
+  const contentDir = path.join(root, "public");
+  await fsp.mkdir(contentDir, { recursive: true });
+  await fsp.writeFile(
+    path.join(contentDir, "linebreak.md"),
+    ["# linebreak", "", "1行目", "2行目", "", "3行目"].join("\n"),
+    "utf8",
+  );
+
+  const server = await startPreviewServer(contentDir);
+  try {
+    const html = await fetch(server.url).then((res) => res.text());
+    assert.match(html, /<p>1行目<br>\s*2行目<\/p>/);
+    assert.match(html, /<p>3行目<\/p>/);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("applies Mathlog alignment commands inside begin environments", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mathlog-begin-align-"));
   const contentDir = path.join(root, "public");
